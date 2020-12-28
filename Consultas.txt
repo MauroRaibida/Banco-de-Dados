@@ -1,0 +1,209 @@
+1. Apresentar os pedidos realizados no ano de 2014. Campos: código do pedido, data de realização, data de entrega e nome fantasia do fornecedor.
+
+select p.codpedido, p.datarealizacao, p.dataentrega, f.nomefantasia
+from pedido p natural join fornecedor f 
+where p.datarealizacao>='01/01/2014' and p.datarealizacao <= '31/12/2014'
+
+
+
+2. Listar os vendedores da cidade de ‘Apucarana’. Campos: nome do vendedor, data de nascimento, nome da cidade.
+
+select v.nome, v.datanascimento, c.nome
+from vendedor v join cidade c on v.codCidade = c.codCidade
+where c.nome = 'Apucarana'
+
+
+
+3. Listar as informações das vendas do produto ‘Cal’. Campos: código da venda, data da venda, nome do vendedor, número do lote, descrição do produto.
+
+select v.codvenda, v.datavenda, ve.nome, l.numerolote, p.descricao
+from vendedor ve natural join venda v natural join itemvenda iv natural join produtolote l natural join produto p
+where p.descricao = 'Cal'
+
+
+
+4. Apresentar todos os produtos, e quando existirem, as vendas relativas ao produto. Campos: código do produto, descrição do produto, código da venda.
+
+select p.codproduto, p.descricao, iv.codvenda
+from produto p left join itemvenda iv on iv.codproduto=p.codprodu
+
+
+
+5. Listar o nome fantasia dos clientes jurídicos que não possuem contas vencidas (contas a pagar).
+
+select cj.nomefantasia
+from clientejuridico cj
+except
+select cj.nomefantasia
+from clientejuridico cj natural join venda v natural join contasreceber cr
+where cr.datapagamento is null and cr.datavencimento < current_date
+
+
+
+6. Listar o nome dos vendedores que venderam os produtos Ferro 6mm ou Ferro 3mm.
+
+select v.nome
+from vendedor v natural join venda vd natural join itemvenda iv natural join produto p
+where p.descricao='Ferro 6mm'
+union
+select v.nome
+from vendedor v natural join venda vd natural join itemvenda iv natural join produto p
+where p.descricao='Ferro 3mm';
+
+
+
+7. Listar o nome fantasia dos Fornecedores de cimento ou areia.
+
+select f.nomefantasia
+from fornecedor f natural join pedido pe natural join itempedido ip natural join produto p
+where p.descricao = 'Cimento'
+union
+select f.nomefantasia
+from fornecedor f natural join pedido pe natural join itempedido ip natural join produto p
+where p.descricao = 'Areia'
+
+
+
+8. Crie uma visão chamada Melhores_Clientes contendo os campos: nome ou razão social do cliente, a quantidade de compras por ele realizadas e o valor total gasto (entenda-se melhores clientes por aqueles que gastaram mais, independente do numero de compras). A visão deve apresentar os melhores clientes de acordo com o valor total gasto. Apresente todos os clientes, mesmo os que não realizaram compra alguma – se exisitirem.
+
+create or replace view Melhores_Clientes as
+select case when cf.nome is null then cj.nomefantasia else cf.nome end, count(v.codvenda), sum(v.valortotal)
+from venda v natural full join clientefisico cf natural full join clientejuridico cj
+group by 1
+order by 3 desc;
+
+
+
+9. Crie uma visão chamada Piores_Vendedores contendo os campos: nome do vendedor e o valor total por ele comercializado, apresentando somente os 5 os piores vendedores.
+
+create or replace view piores_vendedores as
+select v.nome, SUM(ve.valortotal)
+from vendedor v natural join venda ve
+group by 1
+order by 2
+limit 5;
+
+
+
+10. Crie uma visão chamada Produto_Mais_Vendido, para apresentar a descrição e a quantidade de vendas do produto mais vendido.
+
+create or replace view Produto_Mais_Vendido as
+select p.descricao, count(distinct iv.codvenda) as qtdVendas
+from produto p natural join itemvenda iv
+group by 1
+order by 2 desc
+limit 1;
+
+
+
+11. Crie uma visão chamada 2a_Classe_Mais_Vendida contendo os seguintes campos: descrição da classe e quantidade total de produtos vendidos, apresentando somente a 2ª classe mais vendida.
+
+create or replace view segunda_Classe_Mais_Vendida as
+select c.descricao, sum(iv.quantidade)
+from classe c join produto p on c.codclasse=p.codclasse join itemvenda iv on p.codproduto = iv.codproduto
+group by 1
+order by 2 desc
+offset 1
+limit 1;
+select * from segunda_Classe_Mais_Vendida;
+
+
+
+12. Listar o nome dos vendedores que nunca venderam o produto ‘Cal’.
+
+select nome
+from vendedor
+where codvendedor not in (select v.codvendedor from vendedor v natural join itemvenda iv natural join produto p where p.descricao = 'Cal')
+ou
+select ve.nome
+from vendedor ve
+where not exists (select v.codvendedor from vendedor v natural join itemvenda iv natural join produto p where p.descricao = 'Cal' and ve.codvendedor=v.codvendedor)
+
+
+
+13. Listar o código, o nome dos clientes físicos que nunca foram atendidos pelo vendedor Julio Cesar Bara.
+
+select cf.codcliente, cf.nome
+from clientefisico cf
+where cf.codcliente not in (select v.codcliente
+       from venda v join vendedor ve on ve.codvendedor=v.codvendedor
+       where ve.nome = 'Julio Cezar Bara');
+ou
+select cf.codcliente, cf.nome
+from clientefisico cf
+where not exists(select * from venda v natural join vendedor ve where ve.nome='Julio Cezar Bara' and cf.codcliente = v.codcliente)
+
+
+
+14. Listar a razão social do cliente pessoa jurídica e o valor total gasto em suas compras, apresentando somente os clientes que gastaram um valor total maior do que o valor gasto pelo cliente pessoa jurídica Gelinski.
+
+select cj.razaosocial, sum(va.valortotal)
+from venda va natural join clientejuridico cj
+group by 1
+having sum(va.valortotal)>(select sum(va.valortotal)
+			   from venda va natural join clientejuridico cj
+			   where cj.nomefantasia='Gelinski')
+
+
+
+15. Listar o nome do cliente pessoa física que fez o maior número de compras.
+
+select nome, count(*)
+from clientefisico natural join venda
+group by 1
+order by 2 desc
+limit 1
+
+
+
+16. Listar a descrição dos produtos que nunca foram vendidos.
+
+select p.descricao
+from produto p
+where p.codproduto not in (select iv.codproduto from itemvenda iv)
+
+
+
+17. Listar a sigla e o nome das classes que não têm nenhum produto vendido.
+
+from classe c
+where not exists (select * 
+		  from itemvenda iv natural join produto p
+		  where c.codclasse = p.codclasse)
+
+
+
+18. Listar o código, a descrição e a unidade de medida dos produtos não têm pedidos pendentes.
+
+select p.codproduto, p.descricao, p.unidademedida
+from produto p
+where p.codproduto not in (select ip.codproduto from itempedido ip natural join pedido pe
+where pe.dataentrega is null)
+8. Listar a descrição do produto, o estoque mínimo e o nome da classe dos produtos que não têm nenhum lote vencido.
+select p.descricao, p.estoqueminimo, c.nome
+from produto p join classe c on p.codclasse=c.codclasse
+where p.codproduto not in (select pl.codproduto 
+			   from produtolote pl 
+			   where pl.datavalidade < current_date)
+
+
+
+19. Listar os nomes dos vendedores que nunca atenderam clientes jurídicos.
+
+select v.nome
+from vendedor v
+where v.codvendedor not in (select va.codvendedor
+			    from venda va natural join cliente c
+			    where c.tipo='J')
+
+
+
+20. Listar o nome dos vendedores que venderam um valor total maior que o vendedor Joanides Becher.
+
+select ve.nome, sum(va.valortotal)
+from vendedor ve natural join venda va
+group by 1
+having sum(va.valortotal)>=(select sum(va.valortotal) 
+       from venda va join vendedor ve on va.codvendedor = ve.codvendedor
+       where ve.nome = 'Joanidez Becher')
+order by 2

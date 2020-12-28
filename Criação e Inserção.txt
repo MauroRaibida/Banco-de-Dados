@@ -1,0 +1,483 @@
+CREATE TABLE departamento(
+	codDepartamento SERIAL PRIMARY KEY,
+	nome varchar(40) NOT NULL UNIQUE,
+	descricaoFuncional varchar(80),
+	localizacao text
+);
+
+CREATE TABLE estado(
+	siglaEstado CHAR(2) PRIMARY KEY,
+	nome varchar(30) NOT NULL UNIQUE,
+	area numeric(14,2));
+
+CREATE TABLE cidade (
+	codCidade serial PRIMARY KEY,
+	nome varchar(50) UNIQUE NOT NULL,
+	siglaEstado char(2) NOT NULL REFERENCES estado(siglaEstado) ON DELETE no action ON UPDATE cascade);
+
+CREATE TABLE vendedor(
+	codvendedor serial PRIMARY KEY,
+	nome varchar(60) NOT NULL,
+	dataNascimento date CHECK (dataNascimento < current_date),
+	endereco varchar(60),
+	cep char(8),
+	telefone varchar(20),
+	codCidade int default 1,
+	dataContratacao date not null default current_date,
+	codDepartamento int,
+	FOREIGN KEY (codDepartamento) REFERENCES departamento (codDepartamento) ON DELETE set null 
+	ON UPDATE cascade,
+	FOREIGN KEY (codCidade) REFERENCES cidade (codCidade) ON DELETE set default ON UPDATE cascade
+);
+
+CREATE TABLE cliente (
+	codCliente serial PRIMARY KEY,
+	endereco varchar(60),
+	codCidade int,
+	telefone varchar(20),
+	tipo char(1) check(tipo IN ('F', 'J', 'j', 'f')), 
+	dataCadastro date default current_date,
+	cep char(8),
+	bairro varchar(30) NOT NULL,
+	CONSTRAINT fk_cli_cid FOREIGN KEY (codCidade) REFERENCES cidade (codCidade) ON DELETE set null 
+	ON UPDATE cascade
+);
+
+CREATE TABLE clienteFisico (
+	codCliente int PRIMARY KEY REFERENCES cliente(codCliente) ON DELETE no action
+	ON UPDATE cascade,
+	nome varchar (50) NOT NULL,
+	dataNascimento date,
+	cpf varchar(11) NOT NULL UNIQUE,
+	rg varchar(8) NOT NULL
+);
+
+CREATE TABLE clienteJuridico (
+	codCliente int PRIMARY KEY REFERENCES cliente(codCliente) ON DELETE no action
+	ON UPDATE cascade,
+	nomeFantasia varchar (80) NOT NULL UNIQUE,
+	razaoSocial varchar (80) NOT NULL UNIQUE,
+	inscricaoEstadual varchar (20) NOT NULL UNIQUE,
+	cgc varchar (20) NOT NULL UNIQUE
+);
+
+CREATE TABLE classe (
+    	codClasse serial PRIMARY KEY,
+    	sigla varchar(12) not null,
+    	nome varchar(40) NOT NULL,
+    	descricao varchar(80)
+);
+
+CREATE TABLE produto (
+	codProduto serial PRIMARY KEY,
+	descricao varchar(40) NOT NULL UNIQUE,
+	unidadeMedida char(2) CHECK (unidadeMedida IN ('KG', 'LT', 'DZ')),
+	embalagem varchar(15),
+	codClasse int,
+	precoVenda numeric(14,2),
+	estoqueMinimo numeric(14,2),
+	FOREIGN KEY (codClasse) REFERENCES classe(codClasse) ON DELETE set null ON UPDATE set null
+);
+
+CREATE TABLE produtoLote (
+	codProduto int, 
+	numeroLote int,
+	quantidadeAdquirida numeric (14,2),
+	quantidadeVendida numeric (14,2),
+	precoCusto numeric (14,2),
+	dataValidade date,
+	PRIMARY KEY (codProduto, numeroLote),
+	CONSTRAINT fk_prodLote_prod FOREIGN KEY (codProduto) REFERENCES produto (codProduto) ON DELETE no action
+	ON UPDATE cascade
+);
+
+CREATE TABLE venda (
+	codVenda int PRIMARY KEY,
+	codCliente int,
+	codVendedor int DEFAULT 100,
+	dataVenda date default current_date,
+	enderecoEntrega varchar(60),
+	status varchar(30),
+	dataEntrega date,
+	valorTotal numeric(14,2) CHECK (valorTotal > 0),
+	CONSTRAINT fk_venda_vendedor FOREIGN KEY (codVendedor) REFERENCES vendedor (codVendedor) ON DELETE set default
+	ON UPDATE cascade,
+	CONSTRAINT fk_venda_cli FOREIGN KEY (codCliente) REFERENCES cliente (codCliente) ON DELETE cascade
+	ON UPDATE no action
+);
+
+CREATE TABLE itemVenda (
+	codVenda int,
+	codProduto int,
+	numeroLote int,
+	quantidade numeric(14,2) NOT NULL CHECK(quantidade > 0),
+	CONSTRAINT pk_IV PRIMARY KEY (codVenda, codProduto, numeroLote),
+	CONSTRAINT fk_IV_venda FOREIGN KEY (codVenda) REFERENCES venda  (codVenda) ON DELETE cascade ON UPDATE cascade,
+	CONSTRAINT fk_IV_lote FOREIGN KEY (codProduto,numeroLote) REFERENCES produtoLote(codProduto, numeroLote) ON DELETE no action
+);
+
+CREATE TABLE fornecedor(
+	codFornecedor int PRIMARY KEY,
+	nomeFantasia varchar (80) UNIQUE,
+	razaosocial varchar (80) NOT NULL UNIQUE,
+	ie varchar (20) NOT NULL UNIQUE,
+	cgc varchar (20) NOT NULL UNIQUE,
+	endereco varchar(60),
+	telefone varchar(20),	
+	codCidade int REFERENCES cidade (codCidade) ON DELETE no action ON UPDATE cascade
+);
+
+CREATE TABLE pedido (
+	codPedido serial PRIMARY KEY,
+	dataRealizacao date default current_date,
+	dataEntrega date,
+	codFornecedor int,
+  	valor numeric(20,2),
+	status varchar(30) CHECK (status IN ('Aberto', 'Em Aprovação', 'Aprovado')),
+	FOREIGN KEY (codFornecedor) REFERENCES fornecedor(codFornecedor) ON DELETE  cascade ON UPDATE set null
+);
+
+CREATE TABLE itemPedido (
+	codPedido int,
+	codProduto int,
+  	quantidade numeric(14,2) CHECK (quantidade > 0),
+  	PRIMARY KEY (codPedido, codProduto),
+	CONSTRAINT fk_ip_pedido FOREIGN KEY (codpedido) REFERENCES pedido(codPedido) ON DELETE  cascade ON UPDATE cascade
+);
+
+CREATE TABLE contasPagar(
+	codTitulo int,
+	dataVencimento date NOT NULL,
+	parcela int2,
+	codPedido int,
+	valor numeric(20,2),
+	dataPagamento date,
+	localPagamento varchar(80),
+	juros numeric(12,2),
+	correcaoMonetaria numeric(12,2),	
+PRIMARY KEY(codTitulo, parcela),	
+FOREIGN KEY (codpedido) REFERENCES pedido(codPedido) ON DELETE  cascade ON UPDATE cascade);
+
+
+
+CREATE TABLE contasReceber(
+	codTitulo int,
+	dataVencimento date NOT NULL default CURRENT_DATE,
+	parcela int2,
+	codVenda int NOT NULL REFERENCES venda(codVenda) ON DELETE  cascade ON UPDATE cascade,
+	valor numeric(20,2),
+	dataPagamento date,
+	localPagamento varchar(80),
+	juros numeric(12,2),
+	correcaoMonetaria numeric(12,2),
+	formaPagamento varchar(40),
+        PRIMARY KEY(codTitulo, parcela)
+);
+
+
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('AC','Acre');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('AL','Alagoas');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('AP','Amapá');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('AM','Amazonas');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('BA','Bahia');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('CE','Ceara');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('DF','Distrito Federal');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('ES','Espírito Santo');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('GO','Goiás');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('MA','Maranhão');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('MT','Mato Grosso');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('MS','Mato Grosso do Sul');	
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('MG','Minas Gerais');	
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('PA','Pará');	
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('PB','Paraíba');	
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('PR','Paraná');	
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('PE','Pernambuco');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('PI','Piauí');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('RJ','Rio de Janeiro');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('RN','Rio Grande do Norte');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('RS','Rio Grande do Sul');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('RO','Rondônia');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('RR','Roraima');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('SC','Santa Catarina');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('SP','São Paulo');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('SE','Sergipe');
+INSERT INTO ESTADO (siglaEstado, nome) VALUES ('TO','Tocantins');
+
+
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Almirante Tamandaré', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Apucarana', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Aracajú', 'SE');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Balsa Nova', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Baurú','SP');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Belem','PA');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Belo Horizonte', 'MG');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Blumenal','SC');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Boa Vista', 'RR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Boca da Mata', 'AL');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Brasília', 'DF');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Buzios','RJ');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Camboriu', 'SC');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Campo Grande', 'MS');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Canudos', 'BA');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Cascavel','PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Cerro Azul', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Chopinzinho', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Conceição da Feira', 'BA');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Cuiabá', 'MT');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Curitiba', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Feira Grande', 'AL');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Florianópolis','SC');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Fortaleza', 'CE');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Foz do Iguaçu','PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Goiânia', 'GO');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Gramado','RS');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Guarapuava', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Iúna', 'ES');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Ivaiporã', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Jaguaré', 'ES');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('João Pessoa', 'PB');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Laranja da Terra', 'ES');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Londrina', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Macapá', 'AP');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Maceió', 'AL');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Manaus','AM');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Mantenópolis', 'ES');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Maringá','PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Natal','RN');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Palmas', 'TO');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Palmeirinha','PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Pitanga','PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Ponta Grossa', 'PR');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Porto Alegre','RS');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Porto Seguro','BA');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Porto Velho', 'RO');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Primavera','MT');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Recife', 'PE');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Rio Branco', 'AC');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Rio de Janeiro','RJ');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Rondonópolis','MT');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Salvador', 'BA');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('São José da Tapera', 'AL');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('São Luiz', 'MA');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('São Paulo','SP');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Terezina', 'PI');
+INSERT INTO CIDADE (NOME, SIGLAESTADO) VALUES ('Vitória', 'ES');
+
+INSERT INTO DEPARTAMENTO (codDepartamento, nome, descricaofuncional, localizacao) VALUES(default, 'RH', 'Recursos Humanos', 'Predio D, Sala 23');
+INSERT INTO DEPARTAMENTO VALUES (default, 'CT', 'Contabilidade', 'Predio A, Sala 12');
+INSERT INTO DEPARTAMENTO VALUES (default, 'FI', 'Finanças', 'Prédio C, Sala 2');
+INSERT INTO DEPARTAMENTO VALUES (default, 'PR', 'Produção', 'Prédio E, Sala 1');
+INSERT INTO DEPARTAMENTO VALUES (default, 'VD', 'Vendas', 'Predio H, Salas 1,2,3');
+INSERT INTO DEPARTAMENTO VALUES (default,'MT','Manutenção','Predio E, Sala 9');
+INSERT INTO DEPARTAMENTO VALUES (default,'CF','Chão de Fabrica','Predio A, Sala 5');
+INSERT INTO DEPARTAMENTO VALUES (Default,'TR','Treinamento','Predio C, Salas 1,4,8');
+
+
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Rua Saldanha Marinho, 876', '85100000',1,'(42)623-5214', 'J','22/10/2009', 'Santa Cruz');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Av. Moacir Julio Silvestri, 3456', '85010365', 2,'(42)624-8796', 'F','31/03/2004', 'Virmond');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Rua Presidente Zacarias, 76', '85100020',1,'(42)622-3214', 'J','02/01/2016', 'Palmeira');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Rua Marechal Floriano, 56', '89100000',6,'(44)333-5214', 'F','30/11/1995', 'Centro');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Rua Marechal Floriano, 56', '82100000',3,'(47)893-2714', 'J','12/01/1989', 'Vila Bela');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Av. Dom Pedro I, 345', '89100030',15,'(45)271-9874', 'F','01/01/1989', ' Primavera');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Rua Cezumar Rocha, 456', '82234030',16,'(34)9984-3874', 'J','07/07/2014', 'Quiteria');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Av. Visconde de Nacar, 786', '81255030',17,'(41)2343-4567', 'F','06/08/2016', 'Boralo');
+INSERT INTO CLIENTE (codCliente, endereco, cep, codCidade, telefone, tipo, dataCadastro, bairro) VALUES (default, 'Av. Getulio Vargas, 3456', '10020345', 2, '(43)234-98876', 'J', current_date, 'Centro');
+
+INSERT INTO ClienteJuridico VALUES (1,'Superpao','Grupo Superpao Cia Ltda', '1472312424', '78345377623');
+INSERT INTO ClienteJuridico VALUES (3,'Gelinski','Imãos Gelisnki Ltda', '12576312424', '3364645377623');
+INSERT INTO ClienteJuridico VALUES (5,'Lamiguá','ZMH Cia Ltda', '47234532312424', '1223377623');
+INSERT INTO ClienteJuridico VALUES (7,'Hospital e Maternidade SJT','Siqueira & Kulka', '472312424', '8345377623');
+
+INSERT INTO ClienteFisico VALUES (2,'Antonio Maria Santos','5/5/1979', '452312424', '76745377');
+INSERT INTO ClienteFisico VALUES (4,'Maria Salete Marcondes','12/04/1971', '2646312424', '78676745');
+INSERT INTO ClienteFisico VALUES (6,'Jane Santos','22/04/1985', '47452312424', '45377623');
+INSERT INTO ClienteFisico VALUES (8,'Cristiano Zutti','02/10/1071', '567842324', '12122343');
+
+INSERT INTO FORNECEDOR (CodFornecedor,NomeFantasia,RazaoSocial,IE,CGC,Endereco,CodCidade,Telefone) VALUES (1,'Incepa','Irmãos Linderb Ltda','125478963','98745658','Av Pedro Simoes, 456', 2,'(45)98745124');
+INSERT INTO FORNECEDOR (CodFornecedor,NomeFantasia,RazaoSocial,IE,CGC,Endereco,CodCidade,Telefone) VALUES (2,'Malucelli','Malucelli Cia Ltda','47585212589','225145752','Rua Pe. Chagas, 3465', 4,'(41)125-4478');
+INSERT INTO FORNECEDOR (CodFornecedor,NomeFantasia,RazaoSocial,IE,CGC,Endereco,CodCidade,Telefone) VALUES (3,'Tudo Lar','Hamerski Materiais de Construção','121575878','2154987','Rua Vicente Machado, 345', 2,'(45)478-9854');
+INSERT INTO FORNECEDOR (CodFornecedor,NomeFantasia,RazaoSocial,IE,CGC,Endereco,CodCidade,Telefone) VALUES (4,'Coamo','Cooperativa Mourãoense','8745668','42324987','BR 277, Km 72', 7,'(33)3456-2254');
+INSERT INTO FORNECEDOR (CodFornecedor,NomeFantasia,RazaoSocial,IE,CGC,Endereco,CodCidade,Telefone) VALUES (5,'Distribuidora Portinari Ltda','Allure & Irmãos','478575878','12355215','Rua Reinaldo Leroi, 222', 6,'(35)6534-2354');
+
+INSERT INTO VENDEDOR (CodVendedor,CodCidade,Nome,DataNascimento,Endereco,CEP,Telefone,DataContratacao,CodDepartamento) VALUES(default,2,'Tereza Mello','12/02/1961','Rua Pedro Cabral, 45','85010600','(42)629-4789', '01/03/2004', 6);
+INSERT INTO VENDEDOR (CodVendedor,CodCidade,Nome,DataNascimento,Endereco,CEP,Telefone,DataContratacao,CodDepartamento) VALUES(default,1,'Joanidez Becher','26/08/1962','Av Tamandaré, 567','85010365','(42)623-5487', '31/12/1999', 6);
+INSERT INTO VENDEDOR (CodVendedor,CodCidade,Nome,DataNascimento,Endereco,CEP,Telefone,DataContratacao,CodDepartamento) VALUES(default,20,'Julio Cesar Bara','23/05/1985','Rua das Flores, 79','82010987','(44) 987-6541', '21/10/2000', 2);
+INSERT INTO VENDEDOR (CodVendedor,CodCidade,Nome,DataNascimento,Endereco,CEP,Telefone,DataContratacao,CodDepartamento) VALUES(default,20,'Juliana Bara','12/01/1965','Rua das Flores, 79','82010987','(44) 987-6541', '07/05/1995', 2);
+INSERT INTO VENDEDOR (CodVendedor,CodCidade,Nome,DataNascimento,Endereco,CEP,Telefone,DataContratacao,CodDepartamento) VALUES(default,7,'Marta Rodrigues','03/08/1975','Rua das Oliveria, 279','85060987','(41) 654-6911', '1/1/1998', 1);
+INSERT INTO VENDEDOR (CodVendedor,CodCidade,Nome,DataNascimento,Endereco,CEP,Telefone,DataContratacao,CodDepartamento) VALUES(default,13,'Marcos Roberto Nascimento','03/08/1975','Av. Juca Tibes, 945','8706897','(47) 664-4532', '31/01/1975', 1);
+
+INSERT INTO CLASSE VALUES (default,'AC','Acabamentos','Materiais de Acabamento');
+INSERT INTO CLASSE VALUES (default,'FE','Ferragens','Ferragens em Geral');
+INSERT INTO CLASSE VALUES (default,'MC','Marcenaria','Artefatos para Marcenaria');
+INSERT INTO CLASSE VALUES (default,'TE','Eletricos','Materiais de Eletricidade');
+INSERT INTO CLASSE VALUES (default,'BA','Basicos','Materiais Básicos em Geral');
+
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Cimento', 'KG', 5, 18.00, 500,'Saco');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Cal', 'KG', 5, 8.00, 600,'Saco');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Areia', 'LT', 5, 14.00, 1000, 'Pacote');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Ferro 6mm', 'KG', 2, 10.00, 1000, '');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Ferro 3mm', 'KG', 2, 7.00, 300, '');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Azuleijo Decorado Eliane', 'DZ', 1, 20.00, 100, 'Caixa');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Prego', 'KG', 3, 5.00, 500, 'Pacote');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Fio Duplo 5mm', 'KG', 4, 50.00, 500, 'Caixa');
+INSERT INTO PRODUTO (descricao,unidadeMedida,codClasse,precoVenda,estoqueMinimo, embalagem) VALUES('Fio Simples2mm', 'KG', 4, 25.00, 220, 'Caixa');
+
+
+INSERT INTO Pedido VALUES (default, '01/01/2015', '23/01/2015', 1, 3000);
+INSERT INTO Pedido VALUES (default, '01/01/2015', '02/02/2015', 1, 51234.98);
+INSERT INTO Pedido VALUES (default, '23/05/2013', '23/08/2013', 1, 234.65);
+INSERT INTO Pedido VALUES (default, '12/03/2011', '18/08/2011', 2, 1345.00);
+INSERT INTO Pedido VALUES (default, '25/05/2015', '23/06/2015', 2, 1100 );
+INSERT INTO Pedido VALUES (default, '07/07/2014', '23/07/2014', 2, 5000);
+INSERT INTO Pedido VALUES (default, '07/01/2015', '23/02/2015', 2, 345.98);
+INSERT INTO Pedido VALUES (default, '17/01/2013', '23/01/2013', 2, 3400);
+INSERT INTO Pedido VALUES (default, '06/01/2014', '22/01/2014', 3, 21000);
+INSERT INTO Pedido VALUES (default, '22/10/2015', '22/11/2015', 3, 200);
+INSERT INTO Pedido VALUES (default, '06/01/2015', '22/01/2015', 3, 345.98);
+INSERT INTO Pedido VALUES (default, '04/01/2013', '12/01/2013', 3, 345);
+INSERT INTO Pedido VALUES (default, '08/01/2014', '16/01/2014', 2, 32387);
+INSERT INTO Pedido VALUES (default, '08/01/2003', '16/01/2003', 2, 32387);
+
+
+INSERT INTO itempedido VALUES (13,3, 10);
+INSERT INTO ItemPedido VALUES (5,9, 10);
+INSERT INTO ItemPedido VALUES (5,7, 23);
+INSERT INTO ItemPedido VALUES (5,8, 3);
+INSERT INTO ItemPedido VALUES (5,5, 33);
+INSERT INTO ItemPedido VALUES (5,1, 2);
+INSERT INTO ItemPedido VALUES (5,4, 3);
+INSERT INTO ItemPedido VALUES (4,3, 23);
+INSERT INTO ItemPedido VALUES (4,8, 5);
+INSERT INTO ItemPedido VALUES (4,6, 2);
+INSERT INTO ItemPedido VALUES (4,5, 7);
+INSERT INTO ItemPedido VALUES (3,5, 45);
+INSERT INTO ItemPedido VALUES (3,1, 5);
+INSERT INTO ItemPedido VALUES (3,9, 3);
+INSERT INTO ItemPedido VALUES (2,8, 12);
+INSERT INTO ItemPedido VALUES (1,9, 8);
+INSERT INTO ItemPedido VALUES (1,8, 3);
+INSERT INTO ItemPedido VALUES (6,2, 12);
+INSERT INTO ItemPedido VALUES (7,1, 8);
+INSERT INTO ItemPedido VALUES (8,4, 5);
+INSERT INTO ItemPedido VALUES (8,9, 3);
+INSERT INTO ItemPedido VALUES (9,8, 3);
+INSERT INTO ItemPedido VALUES (9,5, 12);
+INSERT INTO ItemPedido VALUES (9,6, 8);
+INSERT INTO ItemPedido VALUES (10,7, 5);
+INSERT INTO ItemPedido VALUES (11,8, 3);
+INSERT INTO ItemPedido VALUES (12,9, 3);
+INSERT INTO ItemPedido VALUES (13,1, 3);
+
+
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor) 
+       VALUES (10001, '23/03/2007', 1, 2, 2500); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor) 
+       VALUES (10001, '23/04/2007', 2, 2, 2500); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor, DataPagamento, LocalPagamento, Juros, CorrecaoMonetaria) 
+       VALUES (10101, '18/04/2008', 1, 1, 345, '18/05/2006', 'Itau', 17, 12); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor, DataPagamento, LocalPagamento) 
+       VALUES (10104, '08/02/2008', 1, 13, 10456, '9/02/2003', 'Caixa Empresa'); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor, DataPagamento, LocalPagamento) 
+       VALUES (10104, '08/03/2008', 2, 13, 10456, '8/03/2004', 'Caixa Eleltrônico BB'); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor)  
+       VALUES (10116, '31/03/2008', 1, 11, 10456); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, Valor)  
+       VALUES (11346, '28/04/2006', 1, 100); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, Valor)  
+       VALUES (11346, '30/05/2009', 2, 100);
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor) 
+       VALUES (10002, '23/03/2007', 1, 2, 2500); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor, DataPagamento, LocalPagamento, Juros, CorrecaoMonetaria) 
+       VALUES (10103, '18/04/2008', 1, 1, 345, '18/05/2006', 'Itau', 17, 12); 
+INSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, CodPedido, Valor, DataPagamento, LocalPagamento) 
+       VALUES (10105, '08/03/2008', 2, 13, 10456, '8/03/2004', 'Caixa Eleltrônico B');
+iNSERT INTO ContasPagar (CodTitulo, DataVencimento, Parcela, Valor)  
+       VALUES (11347, '30/05/2009', 2, 100); 
+ 
+
+INSERT INTO produtoLote VALUES (9,1,300, 200, 15.00, '15/09/2017');
+INSERT INTO produtoLote VALUES (9,2,120, 20,  14.50, '15/10/2008');
+INSERT INTO produtoLote VALUES (9,3,12000, 10000,  14.00, '15/01/2019');
+INSERT INTO produtoLote VALUES (8,1,3000, 560, 5.00, '23/06/2020');
+INSERT INTO produtoLote VALUES (8,2,20, 13,  4.50, '05/05/2019');
+INSERT INTO produtoLote VALUES (8,3,1900, 1234,  4.00, '03/03/2015');
+INSERT INTO produtoLote VALUES (7,1,1900, 456,  10.00, '03/03/2018');
+INSERT INTO produtoLote VALUES (6,1,900, 35,  6.00, '31/01/2012');
+INSERT INTO produtoLote VALUES (4,2,2300, 200,  8.00, '22/03/2016');
+INSERT INTO produtoLote VALUES (5,1,1900, 456,  10.00, '24/09/2018');
+INSERT INTO produtoLote VALUES (5,2,345, 6,  9.00, '13/12/2008');
+INSERT INTO produtoLote VALUES (5,3,230, 56,  10.50, '18/11/2019');
+INSERT INTO produtoLote VALUES (8,4,1700, 568,  3.00, '30/08/2019');
+INSERT INTO produtoLote VALUES (1,1,6400, 6000,  25.00, '18/09/2014');
+INSERT INTO produtoLote VALUES (4,1,3400, 100,  5.00, '18/09/2019');
+INSERT INTO produtoLote VALUES (2,1,3400, 234,  90.00, '18/09/2019');
+INSERT INTO produtoLote VALUES (3,1,8400, 6700,  45.00, '18/09/2017');
+
+
+
+INSERT INTO Venda VALUES (2345, 2, 1, '22/10/2015', 'Rua Santos Eldelbrand, 32', 'Despachada', '28/10/2015',1200 );
+INSERT INTO Venda VALUES (2346, 2, 2, '11/02/2014', 'Rua Santos Eldelbrand, 32', 'Despachada', '13/02/2014', 84);
+INSERT INTO Venda VALUES (2334, 1, 3, '12/03/2015', 'Rua Janaina Sanches, 287', 'A entregar', '14/03/2015', 4950 );
+INSERT INTO Venda VALUES (1235, 1, 2, '5/03/2016', 'Rua Janaina Sanches, 287', 'Despachada', '7/03/2016', 75);
+INSERT INTO Venda VALUES (3578, 3, 3, '6/02/2015', 'Rua Pergola, 467', 'Despachada', '6/02/2015', 40);
+INSERT INTO Venda VALUES (3575, 3, 3, '10/01/2014', 'Rua Pergola, 467', 'Despachada', '20/01/2014', 14);
+INSERT INTO Venda VALUES (4534, 3, 4, '08/03/2013', 'Rua Lopes Vieira, 1287', 'A entregar', '18/03/2013', 148);
+INSERT INTO Venda VALUES (7346, 5, 6, '10/03/2016', 'Rua Abio Marilte, 347', 'Despachada', '10/03/2016', 91);
+INSERT INTO Venda VALUES (8346, 5, 6, '11/08/2015', 'Rua Abio Marilte, 347', 'A entregar', '12/08/2015', 650);
+insert into venda (codvenda, codcliente, codvendedor, datavenda, enderecoentrega, status, valortotal) 
+values (999,3,4, '04/05/2004', 'Rua Marechal Floriano Peixoto, 34', 'Pendente', 250);
+
+
+
+insert into itemVenda (codvenda, numerolote, codproduto, quantidade) values (999,3,9,10);
+INSERT INTO ITEMVENDA VALUES(2345, 9,1,34);
+INSERT INTO ITEMVENDA VALUES(2345, 9,2,6);
+INSERT INTO ITEMVENDA VALUES(2345, 9,3,8);
+INSERT INTO ITEMVENDA VALUES(2346, 5,2,12);
+INSERT INTO ITEMVENDA VALUES(2334, 8,1,98);
+INSERT INTO ITEMVENDA VALUES(2334, 4,2,5);
+INSERT INTO ITEMVENDA VALUES(1235, 5,3,5);
+INSERT INTO ITEMVENDA VALUES(1235, 4,1,4);
+INSERT INTO ITEMVENDA VALUES(3578, 2,1,5);
+INSERT INTO ITEMVENDA VALUES(3575, 5,3,2);
+INSERT INTO ITEMVENDA VALUES(4534, 7,1,17);
+INSERT INTO ITEMVENDA VALUES(4534, 5,3,9);
+INSERT INTO ITEMVENDA VALUES(7346, 5,2,13);
+INSERT INTO ITEMVENDA VALUES(8346, 8,2,13);
+
+
+
+
+
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(10010,2345, '22/10/2008',1, 1234); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(10010,2345, '22/11/2008',2, 1234); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(3456, 2346, '2/11/2007',1, 2365.89); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(4567, 2334, '04/12/2008',1, 400); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(4567, 2334, '05/12/2007',2, 400); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(4567, 2334, '13/06/2008',3, 400); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor, DataPagamento, Juros, CorrecaoMonetaria) 
+       VALUES(1000, 1235, '06/05/2008',1, 789, '06/06/2005', 23, 4); 
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor)
+       VALUES(2345, 3578, '03/06/2007',1, 700);
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor, DataPagamento, LocalPagamento)
+       VALUES(2222, 3575, '03/02/2009',1, 456, '10/03/2007', 'Banco Brasil');
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor)
+       VALUES(3333, 4534, '08/04/2009',1, 345);
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor)
+       VALUES(3333, 4534, '08/05/2007',2, 345);
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor, DataPagamento, LocalPagamento, Juros, CorrecaoMonetaria)
+       VALUES(6767, 7346, '17/03/2008',1, 450, '17/05/2006', 'Caixa Empresa', 98, 45);
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor)
+       VALUES(8989, 8346, '17/09/2008',1, 3450);
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor)
+       VALUES(8989, 8346, '17/10/2003',2, 3450);
+INSERT INTO CONTASRECEBER (codTitulo, codVenda, DataVencimento, Parcela, Valor) 
+       VALUES(10019,999, '04/06/2004',1, 250); 
+
+
